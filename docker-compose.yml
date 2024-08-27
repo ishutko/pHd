@@ -1,0 +1,36 @@
+
+version: "3.7"
+services:
+  app:
+    build:
+      args:
+        user: ivan
+        uid: 1000
+      context: ./
+      dockerfile: Dockerfile
+    image: phd
+    platform: linux/amd64
+    container_name: phd-app
+    restart: unless-stopped
+    working_dir: /var/www/
+    volumes:
+      - ./:/var/www
+    networks:
+      - phd
+
+  nginx:
+    image: nginx:alpine
+    platform: linux/amd64
+    container_name: phd-nginx
+    restart: unless-stopped
+    ports:
+      - 8000:80
+    volumes:
+      - ./:/var/www
+      - ./docker-compose/nginx:/etc/nginx/conf.d/
+    networks:
+      - phd
+
+networks:
+  phd:
+    driver: bridge

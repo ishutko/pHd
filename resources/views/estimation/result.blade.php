@@ -27,7 +27,7 @@
                 {{ number_format($result['confidence_interval'][1], 4) }}
             </p>
             <p>
-                <strong>{{ __('messages.confidence_interval') }}</strong>
+                <strong>{{ __('messages.prediction_interval') }}</strong>
                 &nbsp;
                 {{ number_format($result['prediction_interval'][0], 4) }}
                 &nbsp;-&nbsp;

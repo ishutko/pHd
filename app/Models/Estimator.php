@@ -3,8 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use MathPHP\Probability\Distribution\Continuous\StudentT;
-use MathPHP\LinearAlgebra\MatrixFactory;
 
 /**
  * @property mixed $class
@@ -14,73 +12,36 @@ use MathPHP\LinearAlgebra\MatrixFactory;
  */
 class Estimator extends Model
 {
-    protected $fillable = ['class', 'methods', 'dit', 'confidence'];
-
-    // Ці параметри визначають базовий рівень та вплив незалежних змінних на залежну змінну в рамках нелінійної регресійної моделі.
-    private $intercept = -1.63782126445733;
-    private $coeffs = [0.96641578624015, 0.96301298247654, -0.46272880601894];
-
-    // Розмір вибірки впливає на точність оцінок і ширину довірчих інтервалів
-    private $N = 45;
+    // квантиль распределения стьюдента 2.0484
 
     // Стандартне відхилення остатків моделі, що вказує на точність моделі.
-    private $S_Y = 0.0090855323014;
+    // рассчитать  0.05444
 
-    // Матриця коваріацій або кореляцій між перетвореними незалежними змінними,
-    // що допомагає оцінити ступінь лінійної залежності між ними.
-    private $ZX = [
-        [0.27127997, -0.04335353, 0.25063032],
-        [-0.04335353, 1.53383441, -0.71641416],
-        [0.25063032, -0.71641416, 10.63646880]
-    ];
+    // бокса-кокса и получаем
 
-    // Середні значення незалежних змінних після перетворення, використовувані для центрування даних перед аналізом.
-    private $Z_MEAN = [1.4497370, 0.5378432, 0.1425785];
+    // Z1 среднее 2.903
+    // Z2 среднее 1.290
+    // Z3 среднее 0.429
 
-    public function calculateEstimations(): array
-    {
-        $metrics = [$this->class, $this->methods, $this->dit];
-        $confLevel = $this->confidence;
+    // получаем вектор-строку, умнажаем на обратную мартцу
+    // Зворотна матриця S-1z, получаем вектор-строку
+    // умнажаем на вектор-столбец, получаем число
+    // корень квадратный умножаем
 
-        // Створюємо масив zx як масив масивів для підготовки до матричних операцій
-        $zx = array_map(function ($metric, $mean) {
-            return [log10($metric) - $mean];
-        }, $metrics, $this->Z_MEAN);
+    // для получения Y применяем обратное преобразование
+    // доверительный интервал по формуле 5
 
-        // Створюємо матриці для обчислень
-        $zxMatrix = MatrixFactory::create($zx);
-        $ZXMatrix = MatrixFactory::create($this->ZX);
-        $product = $zxMatrix->transpose()->multiply($ZXMatrix)->multiply($zxMatrix);
-        $se_z = $product->get(0, 0);
+    // получаем величины
 
-        // Розрахунок розміру проекту
-        $size = pow(10, $this->intercept) * pow($metrics[0], $this->coeffs[0]) * pow($metrics[1], $this->coeffs[1]) * pow($metrics[2], $this->coeffs[2]);
-        $df = $this->N - 4;
-        $t_value = $this->tDistribution($df, $confLevel);
+    // добавить проверку что квадрат расстояния махаланобиса не может быть больше чум квантиль распределения хи квадрат
+    // (проверка на выброс) - нормализировать значения Y и факторов, вычисляю для них значение квадрата махаланобиса
+    // сравниваю с квантилем Хи квадрат (постоянный для модели) 14.86
+    // если больше его то выводим сообщение что эти данные не могут быть использованы так как являются выбросом
 
-        // Розрахунок довірчого та передбачуваного інтервалів
-        $conf_val = $t_value * sqrt($this->S_Y * (1.0 / $this->N + $se_z));
-        $conf_interval = [
-            pow(10, log10($size) - $conf_val),
-            pow(10, log10($size) + $conf_val)
-        ];
+    // рассчет квадрата расстояния
 
-        $pred_val = $t_value * sqrt($this->S_Y * (1 + 1.0 / $this->N + $se_z));
-        $pred_interval = [
-            pow(10, log10($size) - $pred_val),
-            pow(10, log10($size) + $pred_val)
-        ];
+    // + осуществить моделирование значения Y с помощью уровнения 9
+    // моделирования значения эпсилон (0.05174) - генератор случайных чисел с нормальным законом распределения
 
-        return [
-            'size' => $size,
-            'confidence_interval' => $conf_interval,
-            'prediction_interval' => $pred_interval
-        ];
-    }
-
-    private function tDistribution($df, $confidenceLevel)
-    {
-        $t = new StudentT($df);
-        return $t->inverse(1 - (1 - $confidenceLevel) / 2);
-    }
+    // добавить селектор выбора количества значений случайных чисел и ориентироваться на среднее значение Y и список значений
 }

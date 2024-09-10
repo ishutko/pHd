@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\EstimationController;
+use App\Http\Controllers\PredictionController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [EstimationController::class, 'index'])->name('form');
-Route::post('/calculate', [EstimationController::class, 'calculate'])->name('calculate');
+Route::get('/', [PredictionController::class, 'index']);
+Route::post('/prediction', [PredictionController::class, 'calculate']);

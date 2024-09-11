@@ -23,5 +23,5 @@ class CakePHPResearchModelInterface extends ResearchModelAbstract
     ];
 
     // Стандартна помилка залишків
-    protected static $standardError = 0.05444;
+    protected static $standardError = 0.05174;
 }

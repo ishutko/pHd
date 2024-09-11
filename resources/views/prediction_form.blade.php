@@ -20,6 +20,12 @@
         border-radius: 10px;
         background-color: #ccc;
     }
+    .alert {
+        font-weight: bold;
+    }
+    .alert-danger {
+        color: red;
+    }
 </style>
 
 <div class="form">
@@ -53,6 +59,13 @@
         <div>
             <button type="submit">Передбачити</button>
         </div>
+        @if ($errors->any())
+            <div class="alert alert-danger">
+                @foreach ($errors->all() as $error)
+                    <p>{{ $error }}</p>
+                @endforeach
+            </div>
+        @endif
     </form>
 </div>
 <p></p>
@@ -73,15 +86,6 @@
     @endforeach
 
 </div>
-
-
-@if ($errors->any())
-    <div class="alert alert-danger">
-        @foreach ($errors->all() as $error)
-            <p>{{ $error }}</p>
-        @endforeach
-    </div>
-@endif
 
 <h1>Анотація до програми</h1>
 

@@ -24,6 +24,7 @@
 
 <div class="form">
     <h1>Результати передбачення</h1>
+    <p>Обрана модель: <b>{{ $model }}</b></p>
     <p>Передбачене значення Y (розмір ПЗ в KLOC): <b>{{ $predictedY }}</b></p>
     <p>Відстань Махаланобіса: <b>{{ $mahalanobisDistance }}</b></p>
     <p>Довірчий інтервал: від <b>{{ $confidenceInterval[0] }}</b> до <b>{{ $confidenceInterval[1] }}</b></p>

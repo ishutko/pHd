@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-interface ResearchModel
+interface ResearchModelInterface
 {
     // Середні значення для кількості класів (X1), методів на клас (X2), DIT на клас (X3)
     public static function getMean(): array;

@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ResearchModel;
+use App\Models\CodeIgniterResearchModel;
+use App\Models\ResearchModelAbstract;
+use App\Models\ResearchModelInterface;
+use App\Models\YiiResearchModel;
 use Exception;
 use Illuminate\Http\Request;
-use App\Models\CakePHPResearchModel;
+use App\Models\CakePHPResearchModelInterface;
 
 class PredictionController extends Controller
 {
@@ -54,7 +57,8 @@ class PredictionController extends Controller
         ]);
 
         // Отримуємо вибрану модель дослідження
-        $model = $this->getResearchModel($request->input('research_model'));
+        $modelName = $request->input('research_model');
+        $model = $this->getResearchModel($modelName);
 
         // Вхідні дані з форми
         $X1 = $request->input('number_of_classes');
@@ -97,19 +101,22 @@ class PredictionController extends Controller
             'predictedY' => $predictedY,
             'mahalanobisDistance' => $mahalanobisDistance,
             'confidenceInterval' => [$predictedY - $CI, $predictedY + $CI],
-            'predictionInterval' => [$predictedY - $PI, $predictedY + $PI]
+            'predictionInterval' => [$predictedY - $PI, $predictedY + $PI],
+            'model' => $modelName
         ]);
     }
 
     private function getResearchModels(): array
     {
         return [
-            'CakePHP' => CakePHPResearchModel::class,
+            'CakePHP' => CakePHPResearchModelInterface::class,
+            'Yii' => YiiResearchModel::class,
+            'CodeIgniter' => CodeIgniterResearchModel::class
         ];
     }
 
     /**
-     * @param string|ResearchModel $model
+     * @param string|ResearchModelInterface $model
      * @param float $min
      * @param float $max
      * @return array
@@ -133,7 +140,7 @@ class PredictionController extends Controller
 
             // Генерація випадкових даних у межах діапазонів
             $randomData = [
-                'number_of_classes' => rand($X1_min * 100, $X1_max * 100) / 100,  // Генеруємо випадкове число з кроком 0.01
+                'number_of_classes' => (int)(rand($X1_min * 100, $X1_max * 100) / 100),  // Генеруємо випадкове число з кроком 1
                 'average_methods' => rand($X2_min * 100, $X2_max * 100) / 100,    // Генеруємо випадкове число з кроком 0.01
                 'average_dit' => rand($X3_min * 100, $X3_max * 100) / 100,        // Генеруємо випадкове число з кроком 0.01
                 'confidence_level' => rand(90, 99)  // Випадковий рівень довіри між 90% і 99%
@@ -152,7 +159,7 @@ class PredictionController extends Controller
 
     /**
      * @param $model
-     * @return string|ResearchModel
+     * @return string|ResearchModelAbstract
      * @throws Exception
      */
     private function getResearchModel($model): string

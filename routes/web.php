@@ -9,4 +9,4 @@ Route::post('/calculation', [CalculationController::class, 'calculate'])->name('
 Route::get('/calculation/random', [CalculationController::class, 'generateRandom'])->name('generate-random');
 Route::get('/calculation/example-data', [CalculationController::class, 'getExampleData'])->name('get-example-data');
 Route::get('/about', [PageController::class, 'about'])->name('about');
-Route::get('/about', [PageController::class, 'contact'])->name('contact');
+Route::get('/contact', [PageController::class, 'contact'])->name('contact');

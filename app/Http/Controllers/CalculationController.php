@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Validator;
+use InvalidArgumentException;
+use MathPHP\LinearAlgebra\MatrixFactory;
 
 class CalculationController extends Controller
 {
@@ -118,26 +120,43 @@ class CalculationController extends Controller
         $dit = $inputs['dit'];
         $confidence = $inputs['confidence'];
 
-        // Box-Cox Transformation Example
+        // Box-Cox Transformation
         $lambda = $config['calculation']['box_cox_lambda'];
         $transformedNOC = $this->boxCoxTransform($noc, $lambda);
         $transformedMbC = $this->boxCoxTransform($mbc, $lambda);
         $transformedDIT = $this->boxCoxTransform($dit, $lambda);
 
-        // Calculate regression using updated parameters
+        // Формируем нормализованный вектор
+        $vector = [$transformedNOC, $transformedMbC, $transformedDIT];
+
+        foreach ($vector as $value) {
+            if (!is_numeric($value) || $value <= 0) {
+                throw new InvalidArgumentException("The vector contains invalid or non-positive values: " . json_encode($vector));
+            }
+        }
+
+        // Regression Parameters
         $b0 = $config['calculation']['parameters']['b0'];
         $b1 = $config['calculation']['parameters']['b1'];
         $b2 = $config['calculation']['parameters']['b2'];
         $b3 = $config['calculation']['parameters']['b3'];
 
+        // Regression Result
         $regressionResult = $b0 + $b1 * $transformedNOC + $b2 * $transformedMbC + $b3 * $transformedDIT;
+
+        // KLOC Calculation
+        $kloc = $this->inverseBoxCox($regressionResult, $lambda);
+
+        // Calculate MMRE and PRED(0.25)
+        $metrics = $this->calculateMetrics($inputs, $regressionResult);
 
         // Calculate prediction intervals using Mahalanobis distance matrix
         $matrix = $config['calculation']['iteration_matrix'];
         $predictionInterval = $this->calculatePredictionInterval($regressionResult, $matrix);
 
-        // Calculate MMRE and PRED(0.25)
-        $metrics = $this->calculateMetrics($inputs, $regressionResult);
+        if (!$this->isPositiveDefinite($matrix)) {
+            throw new InvalidArgumentException("The covariance matrix is not positive definite.");
+        }
 
         return [
             'framework' => $inputs['framework'],
@@ -147,8 +166,40 @@ class CalculationController extends Controller
             'confidence' => $confidence,
             'regressionResult' => $regressionResult,
             'predictionInterval' => $predictionInterval,
-            'metrics' => $metrics
+            'metrics' => $metrics,
+            'kloc' => $kloc,
         ];
+    }
+
+    private function isPositiveDefinite(array $matrix): bool
+    {
+        $covarianceMatrix = MatrixFactory::create($matrix);
+        $eigenvalues = $covarianceMatrix->eigenvalues(); // Вычисляем собственные значения матрицы
+
+        // Если хотя бы одно собственное значение <= 0, матрица не является положительно определённой
+        foreach ($eigenvalues as $eigenvalue) {
+            if ($eigenvalue <= 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Обратное преобразование Бокса-Кокса.
+     *
+     * @param float $z Преобразованное значение.
+     * @param float $lambda Параметр λ.
+     * @return float Оригинальное значение.
+     */
+    private function inverseBoxCox($z, $lambda): float
+    {
+        if ($lambda == 0) {
+            return exp($z); // Если λ = 0, используем экспоненциальное преобразование
+        } else {
+            return pow(($z * $lambda) + 1, 1 / $lambda); // Если λ ≠ 0
+        }
     }
 
     /**

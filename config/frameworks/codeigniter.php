@@ -57,7 +57,9 @@ return [
         'metrics' => [
             'mmre_max' => 0.25, // Maximum acceptable MMRE value
             'pred25_min' => 0.75 // Minimum acceptable PRED(0.25) value
-        ]
+        ],
+
+        't_value' => 2.013 // Значение для 95% доверительного интервала
     ],
 
     // Example data set for verification (added from extracted table)

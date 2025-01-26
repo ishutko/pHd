@@ -1,45 +1,48 @@
 @extends('layouts.app')
 
 @section('content')
-    <h1>Calculation Form</h1>
+    <div class="container mt-5">
+        <h1 class="mb-4 text-center">Calculation Form</h1>
 
-    <form method="POST" action="{{ route('calculate') }}">
-        @csrf
+        <form method="POST" action="{{ route('calculate') }}" class="p-4 border rounded shadow-sm bg-light">
+            @csrf
 
-        <div>
-            <label for="framework">Select Framework:</label>
-            <select name="framework" id="framework" required>
-                @foreach ($frameworks as $framework)
-                    <option value="{{ $framework }}">{{ $framework }}</option>
-                @endforeach
-            </select>
-        </div>
+            <div class="mb-3">
+                <label for="framework" class="form-label">Select Framework:</label>
+                <select name="framework" id="framework" class="form-select" required>
+                    @foreach ($frameworks as $framework)
+                        <option value="{{ $framework }}">{{ $framework }}</option>
+                    @endforeach
+                </select>
+            </div>
 
-        <div>
-            <label for="noc">Number of Classes (NOC):</label>
-            <input type="number" name="noc" id="noc" required>
-        </div>
+            <div class="mb-3">
+                <label for="noc" class="form-label">Number of Classes (NOC):</label>
+                <input type="number" name="noc" id="noc" class="form-control" required>
+            </div>
 
-        <div>
-            <label for="mbc">Methods per Class (MbC):</label>
-            <input type="number" step="0.1" name="mbc" id="mbc" required>
-        </div>
+            <div class="mb-3">
+                <label for="mbc" class="form-label">Methods per Class (MbC):</label>
+                <input type="number" step="0.01" name="mbc" id="mbc" class="form-control" required>
+            </div>
 
-        <div>
-            <label for="dit">Average DIT per Class:</label>
-            <input type="number" step="0.1" name="dit" id="dit" required>
-        </div>
+            <div class="mb-3">
+                <label for="dit" class="form-label">Average DIT per Class:</label>
+                <input type="number" step="0.1" name="dit" id="dit" class="form-control" required>
+            </div>
 
-        <div>
-            <label for="confidence">Confidence Probability (%):</label>
-            <input type="number" name="confidence" id="confidence" required>
-        </div>
+            <div class="mb-3">
+                <label for="confidence" class="form-label">Confidence Probability (%):</label>
+                <input type="number" name="confidence" id="confidence" class="form-control" required>
+            </div>
 
-        <button type="submit">Calculate</button>
-    </form>
-
-    <button id="generate-random">Generate Random Values</button>
-    <button id="load-example">Load Example Data</button>
+            <div class="d-flex justify-content-between">
+                <button type="submit" class="btn btn-primary">Calculate</button>
+                <button type="button" id="generate-random" class="btn btn-warning">Generate Random Values</button>
+                <button type="button" id="load-example" class="btn btn-secondary">Load Example Data</button>
+            </div>
+        </form>
+    </div>
 
     <script>
         // Generate random values

@@ -35,11 +35,23 @@
                 <td>{{ $result['regressionResult'] }}</td>
             </tr>
             <tr>
-                <td>Prediction Interval (Lower Bound)</td>
+                <td>Size (KLOC)</td>
+                <td>{{ $result['kloc'] }}</td>
+            </tr>
+            <tr>
+                <td>Confidence Interval (Lower)</td>
+                <td>{{ $result['confidenceInterval']['lower'] }}</td>
+            </tr>
+            <tr>
+                <td>Confidence Interval (Upper)</td>
+                <td>{{ $result['confidenceInterval']['upper'] }}</td>
+            </tr>
+            <tr>
+                <td>Prediction Interval (Lower)</td>
                 <td>{{ $result['predictionInterval']['lower'] }}</td>
             </tr>
             <tr>
-                <td>Prediction Interval (Upper Bound)</td>
+                <td>Prediction Interval (Upper)</td>
                 <td>{{ $result['predictionInterval']['upper'] }}</td>
             </tr>
             <tr>

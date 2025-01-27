@@ -48,9 +48,9 @@ return [
             'sigma' => 0.1286  // Updated standard deviation
         ],
         'iteration_matrix' => [
-            [7.991, -1.12, -2.60],
-            [-1.12, 4.350, 0.049],
-            [-2.60, 0.049, 0.594]
+            [66.35, -1.72, -1.88],
+            [-1.72, 2.86, 0.0605],
+            [-1.88, 0.0605, 0.485]
         ], // Matrix for Mahalanobis distance
 
         // Metrics calculation thresholds

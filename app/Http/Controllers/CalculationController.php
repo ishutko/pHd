@@ -148,10 +148,15 @@ class CalculationController extends Controller
         // Variance Calculation
         $matrix = $config['calculation']['iteration_matrix'];
         $matrix = $this->iterativeRegularizeMatrix($matrix); // Регуляризация матрицы
+
+        $this->validateDimensions($vector, $matrix);
+
         $variance = $this->calculateVariance($vector, $matrix);
+        $tValue = $config['calculation']['t_value'];
 
         // Prediction Interval Calculation
-        $predictionInterval = $this->calculatePredictionInterval($regressionResult, $matrix);
+        $sigma2 = $config['calculation']['parameters']['sigma'];
+        $predictionInterval = $this->calculatePredictionInterval($regressionResult, $variance, $sigma2, $tValue, $lambda);
 
         // Actual Value
         $actual = $noc * $mbc * $dit;
@@ -159,7 +164,6 @@ class CalculationController extends Controller
         $metrics = $this->calculateMetrics($actual, $kloc);
 
         // Confidence Interval Calculation
-        $tValue = $config['calculation']['t_value'];
         $confidenceInterval = $this->calculateConfidenceInterval($regressionResult, $variance, $tValue, $lambda);
 
         return [
@@ -193,50 +197,37 @@ class CalculationController extends Controller
     }
 
     /**
-     * Regularize the covariance matrix to make it positive definite.
-     *
-     * @param array $matrix Матрица.
-     * @param float $epsilon Маленькое положительное значение.
-     * @return array Регуляризованная матрица.
-     */
-    private function regularizeMatrix(array $matrix, float $epsilon = 1e-5): array
-    {
-        $size = count($matrix);
-        for ($i = 0; $i < $size; $i++) {
-            $matrix[$i][$i] += $epsilon; // Добавляем небольшое значение к диагональным элементам
-        }
-        return $matrix;
-    }
-
-    /**
      * Regularize the covariance matrix iteratively to make it positive definite.
-     *
-     * @param array $matrix Матрица.
-     * @param float $initialEpsilon Начальное значение epsilon.
-     * @param int $maxIterations Максимальное количество итераций.
-     * @return array Регуляризованная матрица.
-     * @throws InvalidArgumentException Если матрица не может быть исправлена.
      */
-    private function iterativeRegularizeMatrix(array $matrix, float $initialEpsilon = 1e-5, int $maxIterations = 100): array
+    private function iterativeRegularizeMatrix(array $matrix, float $epsilon = 1e-5, int $maxIterations = 100): array
     {
-        $epsilon = $initialEpsilon;
-
         for ($i = 0; $i < $maxIterations; $i++) {
-            $regularizedMatrix = $matrix;
             $size = count($matrix);
-
             for ($j = 0; $j < $size; $j++) {
-                $regularizedMatrix[$j][$j] += $epsilon;
+                $matrix[$j][$j] += $epsilon; // Регуляризация диагональных элементов
             }
 
-            if ($this->isPositiveDefinite($regularizedMatrix)) {
-                return $regularizedMatrix;
+            if ($this->isPositiveDefinite($matrix)) {
+                return $matrix;
             }
 
             $epsilon *= 10; // Увеличиваем epsilon на порядок
         }
 
         throw new InvalidArgumentException("The covariance matrix could not be regularized to become positive definite.");
+    }
+
+    private function isPositiveDefinite(array $matrix): bool
+    {
+        $covarianceMatrix = MatrixFactory::create($matrix);
+
+        foreach ($covarianceMatrix->eigenvalues() as $eigenvalue) {
+            if ($eigenvalue <= 0) {
+                return false; // Немедленно возвращаем false
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -283,83 +274,50 @@ class CalculationController extends Controller
      */
     private function validateDimensions(array $vector, array $matrix): void
     {
-        $vectorLength = count($vector);
         $matrixRows = count($matrix);
         $matrixCols = count($matrix[0]);
 
-        // Проверяем, что матрица квадратная
-        foreach ($matrix as $row) {
-            if (count($row) !== $matrixRows) {
-                throw new InvalidArgumentException(
-                    "Matrix is not square. Each row must have $matrixRows columns."
-                );
-            }
+        // Проверка квадратности матрицы
+        if ($matrixRows !== $matrixCols) {
+            throw new InvalidArgumentException("Matrix is not square. Size: {$matrixRows}x{$matrixCols}.");
         }
 
-        // Проверяем, что длина вектора совпадает с размерностью матрицы
-        if ($vectorLength !== $matrixRows) {
+        // Проверка соответствия длины вектора и размеров матрицы
+        if (count($vector) !== $matrixRows) {
             throw new InvalidArgumentException(
-                "Vector length ($vectorLength) does not match matrix size ($matrixRows x $matrixCols)."
+                "Vector length (" . count($vector) . ") does not match matrix size ({$matrixRows}x{$matrixCols})."
             );
         }
     }
 
-    /**
-     * @param array $matrix
-     * @return bool
-     * @throws BadDataException
-     * @throws IncorrectTypeException
-     * @throws MathException
-     * @throws MatrixException
-     */
-    private function isPositiveDefinite(array $matrix): bool
+    private function boxCoxTransform(float $value, float $lambda): float
     {
-        $covarianceMatrix = MatrixFactory::create($matrix);
-        $eigenvalues = $covarianceMatrix->eigenvalues(); // Вычисляем собственные значения матрицы
-
-        // Если хотя бы одно собственное значение <= 0, матрица не является положительно определённой
-        foreach ($eigenvalues as $eigenvalue) {
-            if ($eigenvalue <= 0) {
-                return false;
-            }
-        }
-
-        return true;
+        return ($lambda === 0) ? log($value) : (pow($value, $lambda) - 1) / $lambda;
     }
 
-    /**
-     * Обратное преобразование Бокса-Кокса.
-     */
     private function inverseBoxCox(float $z, float $lambda): float
     {
-        if ($lambda == 0) {
-            return exp($z); // Если λ = 0, используем экспоненциальное преобразование
-        } else {
-            return pow(($z * $lambda) + 1, 1 / $lambda); // Если λ ≠ 0
-        }
+        return ($lambda === 0) ? exp($z) : pow($lambda * $z + 1, 1 / $lambda);
     }
 
-    /**
-     * Box-Cox Transformation Method
-     */
-    private function boxCoxTransform($value, $lambda)
-    {
-        if ($lambda == 0) {
-            return log($value);
-        }
-
-        return (pow($value, $lambda) - 1) / $lambda;
-    }
 
     /**
-     * Calculate prediction interval using Mahalanobis distance matrix
+     * Calculate prediction interval using Mahalanobis distance matrix and σ².
      */
-    private function calculatePredictionInterval($regressionResult, $matrix): array
+    private function calculatePredictionInterval(float $Zy, float $variance, float $sigma2, float $tValue, float $lambda): array
     {
-        $lowerBound = $regressionResult - sqrt($matrix[0][0]);
-        $upperBound = $regressionResult + sqrt($matrix[0][0]);
+        // Вычисляем нижнюю и верхнюю границы предиктивного интервала
+        $lowerBoundZ = $Zy - $tValue * sqrt($variance + $sigma2);
+        $upperBoundZ = $Zy + $tValue * sqrt($variance + $sigma2);
 
-        return ['lower' => $lowerBound, 'upper' => $upperBound];
+        // Преобразуем обратно через Box-Cox
+        $lowerBound = $this->inverseBoxCox($lowerBoundZ, $lambda);
+        $upperBound = $this->inverseBoxCox($upperBoundZ, $lambda);
+
+        return [
+            'lower' => $lowerBound,
+            'upper' => $upperBound,
+        ];
     }
 
     /**

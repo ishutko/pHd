@@ -28,7 +28,7 @@
 
             <div class="mb-3">
                 <label for="dit" class="form-label">Average DIT per Class:</label>
-                <input type="number" step="0.1" name="dit" id="dit" class="form-control" required>
+                <input type="number" step="0.01" name="dit" id="dit" class="form-control" required>
             </div>
 
             <div class="mb-3">

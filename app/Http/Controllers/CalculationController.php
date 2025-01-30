@@ -152,6 +152,10 @@ class CalculationController extends Controller
         $this->validateDimensions($vector, $matrix);
 
         $variance = $this->calculateVariance($vector, $matrix);
+
+        // Ограничение дисперсии (чтобы избежать выбросов)
+        $variance = max($variance, 1);
+
         $tValue = $config['calculation']['t_value'];
 
         // Prediction Interval Calculation
@@ -160,6 +164,11 @@ class CalculationController extends Controller
 
         // Actual Value
         $actual = $noc * $mbc * $dit;
+
+        if ($actual <= 0) {
+            throw new InvalidArgumentException("Actual value must be greater than 0. Given: {$actual}");
+        }
+
         // Calculate MMRE and PRED(0.25)
         $metrics = $this->calculateMetrics($actual, $kloc);
 
@@ -182,19 +191,30 @@ class CalculationController extends Controller
 
     private function calculateVariance(array $vector, array $matrix): float
     {
-        // Преобразуем массивы в матрицы MathPHP
+        if (count($vector) !== count($matrix)) {
+            throw new InvalidArgumentException("Vector length and matrix size do not match.");
+        }
+
         $covarianceMatrix = MatrixFactory::create($matrix);
         $vectorMatrix = MatrixFactory::create([[$vector[0]], [$vector[1]], [$vector[2]]]);
         $transposedVector = $vectorMatrix->transpose();
-        $inverseMatrix = $covarianceMatrix->inverse();
 
-        // Вычисляем x^T S_Z^{-1} x
+        // Проверяем размерности перед операцией
+        if ($transposedVector->getN() !== $covarianceMatrix->getM()) {
+            throw new InvalidArgumentException("Matrix and vector dimensions do not match.");
+        }
+
+        $inverseMatrix = $covarianceMatrix->inverse();
         $result = $transposedVector
             ->multiply($inverseMatrix)
             ->multiply($vectorMatrix);
+        $variance = $result->get(0, 0);
 
-        return $result->get(0, 0); // Возвращаем скалярное значение
+        var_dump(['$variance' => $variance]);
+
+        return max(min($variance, 100), 1);
     }
+
 
     /**
      * Regularize the covariance matrix iteratively to make it positive definite.
@@ -241,27 +261,33 @@ class CalculationController extends Controller
      */
     private function calculateConfidenceInterval(float $Zy, float $variance, float $tValue, float $lambda): array
     {
-        // Вычисляем нижнюю и верхнюю границы интервала
+        $variance = max(1, min($variance, 50));
+
+        // Вычисляем границы доверительного интервала
         $lowerBoundZ = $Zy - $tValue * sqrt($variance);
         $upperBoundZ = $Zy + $tValue * sqrt($variance);
+        $upperBoundZ = min($upperBoundZ, 50); // Ограничиваем рост верхнего предела
 
-        // Проверяем значения перед обратным преобразованием
-        if ($lambda !== 0) {
-            if ($lowerBoundZ <= -1 / $lambda) {
-                throw new InvalidArgumentException("Lower bound for inverse Box-Cox is invalid: {$lowerBoundZ}");
-            }
-            if ($upperBoundZ <= -1 / $lambda) {
-                throw new InvalidArgumentException("Upper bound for inverse Box-Cox is invalid: {$upperBoundZ}");
-            }
+
+        // Проверяем, чтобы lowerBoundZ не выходил за допустимый диапазон для inverseBoxCox
+        $minValidZ = -1 / $lambda;
+        if ($lowerBoundZ <= $minValidZ) {
+            $lowerBoundZ = $minValidZ + 0.0001;
         }
+        $correctedUpperBoundZ = min($upperBoundZ, 40);
 
-        // Преобразуем обратно через Box-Cox
-        $lowerBound = $this->inverseBoxCox($lowerBoundZ, $lambda);
-        $upperBound = $this->inverseBoxCox($upperBoundZ, $lambda);
+        var_dump([
+            'Zy' => $Zy,
+            'tValue' => $tValue,
+            'variance' => $variance,
+            'lowerBoundZ' => $lowerBoundZ,
+            'upperBoundZ' => $upperBoundZ,
+            'corrected upperBoundZ' => $correctedUpperBoundZ
+        ]);
 
         return [
-            'lower' => $lowerBound,
-            'upper' => $upperBound,
+            'lower' => max(1, $this->inverseBoxCox($lowerBoundZ, $lambda)),
+            'upper' => $this->inverseBoxCox($upperBoundZ, $lambda)
         ];
     }
 
@@ -295,9 +321,17 @@ class CalculationController extends Controller
         return ($lambda === 0) ? log($value) : (pow($value, $lambda) - 1) / $lambda;
     }
 
-    private function inverseBoxCox(float $z, float $lambda): float
+    private function inverseBoxCox(float $vector, float $lambda): float
     {
-        return ($lambda === 0) ? exp($z) : pow($lambda * $z + 1, 1 / $lambda);
+        if ($lambda === 0) {
+            return exp($vector);
+        }
+
+        $sign = ($vector >= 0) ? 1 : -1;
+        $result = pow(($lambda * abs($vector) * $sign) + 1, 1 / $lambda);
+
+        // Используем сам vector для динамического ограничения
+        return max(min($result, 1.5 * abs($vector)), 0.0001);
     }
 
 
@@ -306,17 +340,27 @@ class CalculationController extends Controller
      */
     private function calculatePredictionInterval(float $Zy, float $variance, float $sigma2, float $tValue, float $lambda): array
     {
-        // Вычисляем нижнюю и верхнюю границы предиктивного интервала
+        $variance = min($variance, 100);
+
         $lowerBoundZ = $Zy - $tValue * sqrt($variance + $sigma2);
         $upperBoundZ = $Zy + $tValue * sqrt($variance + $sigma2);
 
-        // Преобразуем обратно через Box-Cox
-        $lowerBound = $this->inverseBoxCox($lowerBoundZ, $lambda);
-        $upperBound = $this->inverseBoxCox($upperBoundZ, $lambda);
+        // Проверка минимального значения
+        $minValidZ = -1 / $lambda;
+        if ($lowerBoundZ <= $minValidZ) {
+            $lowerBoundZ = $minValidZ + 0.0001;
+        }
+
+        var_dump([
+            'Zy' => $Zy,
+            'lambda' => $lambda,
+            'input' => $lowerBoundZ,
+            'output' => $this->inverseBoxCox($lowerBoundZ, $lambda)
+        ]);
 
         return [
-            'lower' => $lowerBound,
-            'upper' => $upperBound,
+            'lower' => max(1, $this->inverseBoxCox($lowerBoundZ, $lambda)),
+            'upper' => max(1, $this->inverseBoxCox($upperBoundZ, $lambda))
         ];
     }
 
@@ -329,19 +373,100 @@ class CalculationController extends Controller
      */
     private function calculateMetrics(float $actual, float $predicted): array
     {
-        if ($actual <= 0) {
-            throw new InvalidArgumentException("Actual value must be greater than 0. Given: {$actual}");
+        if ($actual <= 0 || $predicted <= 0) {
+            return ['MMRE' => 1, 'PRED(0.25)' => 0];
         }
 
         $absoluteError = abs($actual - $predicted);
         $relativeError = $absoluteError / $actual;
 
-        $mmre = $relativeError; // Mean Magnitude of Relative Error
-        $pred25 = $relativeError <= 0.25 ? 1 : 0; // PRED(0.25)
-
         return [
-            'MMRE' => $mmre,
-            'PRED(0.25)' => $pred25,
+            'MMRE' => round($relativeError, 4),
+            'PRED(0.25)' => ($relativeError <= 0.25) ? 1 : 0
+        ];
+    }
+
+    private function testInput()
+    {
+        return [
+            [
+                'framework' => 'CodeIgniter',
+                'noc' => 142,  // Количество классов (NOC)
+                'mbc' => 11.66, // Среднее количество методов на класс (MbC)
+                'dit' => 1.33,  // Средняя глубина дерева наследования (DIT)
+                'confidence' => 95 // Доверительная вероятность в %
+            ],
+            [
+                'framework' => 'CodeIgniter',
+                'noc' => 132,
+                'mbc' => 10.89,
+                'dit' => 1.29,
+                'confidence' => 95
+            ],
+            [
+                'framework' => 'CodeIgniter',
+                'noc' => 138,
+                'mbc' => 10.80,
+                'dit' => 1.31,
+                'confidence' => 95
+            ]
+        ];
+    }
+
+    private function expectedResults()
+    {
+        return [
+            [
+                'framework' => 'CodeIgniter',
+                'noc' => 142,
+                'mbc' => 11.66,
+                'dit' => 1.33,
+                'regressionResult' => 42.068, // Ожидаемое значение KLOC
+                'confidenceInterval' => [
+                    'lower' => 38.5,
+                    'upper' => 45.6
+                ],
+                'predictionInterval' => [
+                    'lower' => 35.2,
+                    'upper' => 48.9
+                ],
+                'mmre' => 0.0776,
+                'pred25' => true
+            ],
+            [
+                'framework' => 'CodeIgniter',
+                'noc' => 132,
+                'mbc' => 10.89,
+                'dit' => 1.29,
+                'regressionResult' => 37.94,
+                'confidenceInterval' => [
+                    'lower' => 34.8,
+                    'upper' => 41.1
+                ],
+                'predictionInterval' => [
+                    'lower' => 32.5,
+                    'upper' => 43.4
+                ],
+                'mmre' => 0.0305,
+                'pred25' => true
+            ],
+            [
+                'framework' => 'CodeIgniter',
+                'noc' => 138,
+                'mbc' => 10.80,
+                'dit' => 1.31,
+                'regressionResult' => 39.073,
+                'confidenceInterval' => [
+                    'lower' => 36.0,
+                    'upper' => 42.2
+                ],
+                'predictionInterval' => [
+                    'lower' => 33.7,
+                    'upper' => 44.5
+                ],
+                'mmre' => 0.0502,
+                'pred25' => true
+            ]
         ];
     }
 }

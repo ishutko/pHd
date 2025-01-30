@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
 use MathPHP\Exception\BadDataException;
+use MathPHP\Exception\BadParameterException;
 use MathPHP\Exception\IncorrectTypeException;
 use MathPHP\Exception\MathException;
 use MathPHP\Exception\MatrixException;
+use MathPHP\Exception\OutOfBoundsException;
 use MathPHP\LinearAlgebra\MatrixFactory;
 
 class CalculationController extends Controller
@@ -84,7 +87,7 @@ class CalculationController extends Controller
     /**
      * Generate random values for the form inputs.
      */
-    public function generateRandom(Request $request)
+    public function generateRandom(Request $request): JsonResponse
     {
         $framework = $request->input('framework');
         $config = Config::get("frameworks." . strtolower($framework));
@@ -102,7 +105,7 @@ class CalculationController extends Controller
     /**
      * Get example data for testing calculations.
      */
-    public function getExampleData(Request $request)
+    public function getExampleData(Request $request): JsonResponse
     {
         $framework = $request->input('framework');
         $config = Config::get("frameworks." . strtolower($framework));
@@ -117,7 +120,7 @@ class CalculationController extends Controller
     /**
      * Perform calculations based on user inputs.
      */
-    private function performCalculations(array $inputs, array $config)
+    private function performCalculations(array $inputs, array $config): array
     {
         $noc = $inputs['noc'];
         $mbc = $inputs['mbc'];
@@ -166,7 +169,7 @@ class CalculationController extends Controller
         $actual = $noc * $mbc * $dit;
 
         if ($actual <= 0) {
-            throw new InvalidArgumentException("Actual value must be greater than 0. Given: {$actual}");
+            throw new InvalidArgumentException("Actual value must be greater than 0. Given: $actual");
         }
 
         // Calculate MMRE and PRED(0.25)
@@ -185,10 +188,18 @@ class CalculationController extends Controller
             'predictionInterval' => $predictionInterval,
             'metrics' => $metrics,
             'kloc' => $kloc,
-            'confidenceInterval' => $confidenceInterval, // Добавляем Confidence Interval
+            'confidenceInterval' => $confidenceInterval,
         ];
     }
 
+    /**
+     * @throws OutOfBoundsException
+     * @throws BadDataException
+     * @throws IncorrectTypeException
+     * @throws MathException
+     * @throws MatrixException
+     * @throws BadParameterException
+     */
     private function calculateVariance(array $vector, array $matrix): float
     {
         if (count($vector) !== count($matrix)) {
@@ -210,7 +221,7 @@ class CalculationController extends Controller
             ->multiply($vectorMatrix);
         $variance = $result->get(0, 0);
 
-        var_dump(['$variance' => $variance]);
+//        var_dump(['$variance' => $variance]);
 
         return max(min($variance, 100), 1);
     }
@@ -237,6 +248,12 @@ class CalculationController extends Controller
         throw new InvalidArgumentException("The covariance matrix could not be regularized to become positive definite.");
     }
 
+    /**
+     * @throws IncorrectTypeException
+     * @throws MatrixException
+     * @throws MathException
+     * @throws BadDataException
+     */
     private function isPositiveDefinite(array $matrix): bool
     {
         $covarianceMatrix = MatrixFactory::create($matrix);
@@ -276,14 +293,14 @@ class CalculationController extends Controller
         }
         $correctedUpperBoundZ = min($upperBoundZ, 40);
 
-        var_dump([
-            'Zy' => $Zy,
-            'tValue' => $tValue,
-            'variance' => $variance,
-            'lowerBoundZ' => $lowerBoundZ,
-            'upperBoundZ' => $upperBoundZ,
-            'corrected upperBoundZ' => $correctedUpperBoundZ
-        ]);
+//        var_dump([
+//            'Zy' => $Zy,
+//            'tValue' => $tValue,
+//            'variance' => $variance,
+//            'lowerBoundZ' => $lowerBoundZ,
+//            'upperBoundZ' => $upperBoundZ,
+//            'corrected upperBoundZ' => $correctedUpperBoundZ
+//        ]);
 
         return [
             'lower' => max(1, $this->inverseBoxCox($lowerBoundZ, $lambda)),
@@ -351,12 +368,12 @@ class CalculationController extends Controller
             $lowerBoundZ = $minValidZ + 0.0001;
         }
 
-        var_dump([
-            'Zy' => $Zy,
-            'lambda' => $lambda,
-            'input' => $lowerBoundZ,
-            'output' => $this->inverseBoxCox($lowerBoundZ, $lambda)
-        ]);
+//        var_dump([
+//            'Zy' => $Zy,
+//            'lambda' => $lambda,
+//            'input' => $lowerBoundZ,
+//            'output' => $this->inverseBoxCox($lowerBoundZ, $lambda)
+//        ]);
 
         return [
             'lower' => max(1, $this->inverseBoxCox($lowerBoundZ, $lambda)),
